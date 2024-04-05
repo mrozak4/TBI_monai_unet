@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --account=def-gstanisz
+#SBATCH --account=rrg-bojana_gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=48
 #SBATCH --mem=498GB
-#SBATCH --time=1:00:00
+#SBATCH --time=3:00:00
 #SBATCH --array=0-10%5
 #SBATCH --out=/home/rozakmat/projects/rrg-bojana/rozakmat/TBI_monai_UNET/logs/predict_large-%A_%a.out --array=0-10%5
 #SBATCH --mail-user=matthew.rozak@mail.utoronto.ca

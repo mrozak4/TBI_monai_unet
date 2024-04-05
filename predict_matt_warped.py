@@ -29,7 +29,6 @@ data_dicts = [
 
 print(len(data_dicts))
 
-#data_dicts = [data_dicts[_i]]
 
 pred_transforms = get_pred_transforms()
 
@@ -43,8 +42,5 @@ with torch.no_grad():
             pred_array = predict(pred_data, num_evals=20, model=model)
             mean = float16(pred_array.mean(axis=0))
             save(sub('projects/rrg-bojana/rozakmat','projects/rrg-bojana/rozakmat',sub('.tif','_mean.npy',new_file_name)),mean)
-            #print(sub('projects/rrg-bojana/rozakmat','projects/rrg-bojana/rozakmat',sub('.tif','_mean.npy',new_file_name)))
             save(sub('.tif','_pred.npy',new_file_name),pred_array)
-            #print(sub('.tif','_pred.npy',new_file_name))
-            #print(re.sub('.tif','_mean.npy',new_file_name))
 

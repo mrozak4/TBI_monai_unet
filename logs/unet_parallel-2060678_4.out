@@ -1,29 +1,0 @@
-/lustre06/project/6023374/rozakmat/monai/lib/python3.7/site-packages/skimage/io/manage_plugins.py:23: UserWarning: Your installed pillow version is < 7.1.0. Several security issues (CVE-2020-11538, CVE-2020-10379, CVE-2020-10994, CVE-2020-10177) have been fixed in pillow 7.1.0 or higher. We recommend to upgrade this library.
-  from .collection import imread_collection_wrapper
-/home/rozakmat/projects/def-bojana/rozakmat/TBI_monai_UNET/training_models/4
-Loading dataset:   0%|          | 0/27 [00:00<?, ?it/s]Loading dataset:   4%|▎         | 1/27 [00:07<03:16,  7.55s/it]Loading dataset:   7%|▋         | 2/27 [00:07<01:24,  3.37s/it]Loading dataset:  19%|█▊        | 5/27 [00:14<00:56,  2.58s/it]Loading dataset:  30%|██▉       | 8/27 [00:15<00:24,  1.31s/it]Loading dataset:  33%|███▎      | 9/27 [00:22<00:43,  2.42s/it]Loading dataset:  37%|███▋      | 10/27 [00:22<00:34,  2.01s/it]Loading dataset:  48%|████▊     | 13/27 [00:29<00:30,  2.15s/it]Loading dataset:  59%|█████▉    | 16/27 [00:29<00:14,  1.32s/it]Loading dataset:  63%|██████▎   | 17/27 [00:36<00:22,  2.25s/it]Loading dataset:  74%|███████▍  | 20/27 [00:37<00:09,  1.36s/it]Loading dataset:  78%|███████▊  | 21/27 [00:44<00:13,  2.28s/it]Loading dataset:  85%|████████▌ | 23/27 [00:44<00:06,  1.59s/it]Loading dataset:  89%|████████▉ | 24/27 [00:45<00:04,  1.43s/it]Loading dataset:  93%|█████████▎| 25/27 [00:51<00:04,  2.43s/it]Loading dataset:  96%|█████████▋| 26/27 [00:51<00:01,  1.91s/it]Loading dataset: 100%|██████████| 27/27 [00:51<00:00,  1.90s/it]
-Loading dataset:   0%|          | 0/6 [00:00<?, ?it/s]Loading dataset:  17%|█▋        | 1/6 [00:07<00:36,  7.34s/it]Loading dataset:  33%|███▎      | 2/6 [00:07<00:13,  3.40s/it]Loading dataset:  83%|████████▎ | 5/6 [00:14<00:02,  2.47s/it]Loading dataset: 100%|██████████| 6/6 [00:14<00:00,  1.88s/it]Loading dataset: 100%|██████████| 6/6 [00:14<00:00,  2.41s/it]
-  0%|          | 0/200 [00:00<?, ?it/s]----------
-epoch 1/200
-  0%|          | 1/200 [00:36<2:02:24, 36.91s/it]1/9, train_loss: 0.9842
-2/9, train_loss: 0.9545
-3/9, train_loss: 0.9390
-4/9, train_loss: 0.9237
-5/9, train_loss: 0.9405
-6/9, train_loss: 0.9079
-7/9, train_loss: 0.9317
-8/9, train_loss: 0.8783
-9/9, train_loss: 0.9180
-epoch 1 average loss: 0.9309
-----------
-epoch 2/200
-1/9, train_loss: 0.8585
-2/9, train_loss: 0.8847
-3/9, train_loss: 0.9061
-4/9, train_loss: 0.9007
-5/9, train_loss: 0.8752
-6/9, train_loss: 0.8323
-7/9, train_loss: 0.7637
-8/9, train_loss: 0.8201
-9/9, train_loss: 0.8093
-epoch 2 average loss: 0.8501

@@ -1,5 +1,4 @@
 # Full requirements for developments
--r requirements-min.txt
 pytorch-ignite==0.4.7
 gdown>=3.6.4
 scipy
@@ -20,7 +19,7 @@ pycodestyle
 pyflakes
 black
 isort
-pytype>=2020.6.1; platform_system != "Windows"
+pytype>=2020.6.1#; platform_system != "Windows"
 types-pkg_resources
 mypy>=0.790
 ninja
@@ -31,8 +30,8 @@ recommonmark==0.6.0
 sphinx-autodoc-typehints==1.11.1
 sphinx-rtd-theme==0.5.2
 openslide-python==1.1.2
-imagecodecs; platform_system == "Linux"
-tifffile; platform_system == "Linux"
+imagecodecs#; platform_system == "Linux"
+tifffile#; platform_system == "Linux"
 pandas
 requests
 einops
