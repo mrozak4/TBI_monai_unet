@@ -30,12 +30,13 @@ from monai.transforms import (
     RandSpatialCropSamplesd,
     FillHoles,
     LabelFilter,
-    LabelToContour
+    LabelToContour,
+    RandCoarseDropoutd
 )
 from monai.handlers.utils import from_engine
-from monai.networks.nets import UNet
+from monai.networks.nets import UNet, UNETR
 from monai.networks.layers import Norm
-from monai.metrics import DiceMetric, HausdorffDistanceMetric
+from monai.metrics import DiceMetric, HausdorffDistanceMetric, get_confusion_matrix, ConfusionMatrixMetric
 from monai.losses import DiceLoss, DiceCELoss, DiceFocalLoss
 from monai.inferers import sliding_window_inference
 from monai.data import CacheDataset, DataLoader, Dataset, decollate_batch, ImageReader
@@ -64,6 +65,7 @@ import pandas as pd
 from mlflow import log_metric, log_param, log_artifacts, set_experiment, start_run, end_run
 import warnings
 import argparse
+from sklearn.metrics import confusion_matrix
 warnings.filterwarnings('ignore')
 
 ################################
@@ -191,6 +193,8 @@ with open(parameter_file, 'rb') as handle:
 for i in params.keys():
     log_param(i,params[i])
 
+params["max_epochs"] = params["max_epochs"] * 3
+
 log_param('model','unet')
 
 ###########################
@@ -200,7 +204,7 @@ log_param('model','unet')
 directory = re.sub('.pickle',
                    '',
                    re.sub('hyperparameter_pickle_files/parameters',
-                          'training_models/',
+                          'training_models_unet/',
                            parameter_file
                          )
                   )
@@ -208,7 +212,7 @@ try:
     os.mkdir(directory)
 except OSError as error:
     print(error) 
-log_artifacts(directory)
+#log_artifacts(directory)
 print(directory)
 
 ###########################
@@ -216,10 +220,10 @@ print(directory)
 ###########################
 
 #make list of data dictionaries
-train_images_path = Path('/home/rozakmat/projects/def-bojana/rozakmat/TBI/GT_filtered+raw/') #raw path images
+train_images_path = Path('/home/rozakmat/projects/rrg-bojana/rozakmat/TBI/GT_filtered+raw') #raw path images
 train_images_paths = list(train_images_path.glob('*.tif'))#get images
 train_images = sorted([x.as_posix() for x in train_images_paths])#sort
-train_labels_path = Path('/home/rozakmat/projects/def-bojana/rozakmat/TBI/GT_filtered+raw/')#labels path
+train_labels_path = Path('/home/rozakmat/projects/rrg-bojana/rozakmat/TBI/GT_filtered+raw')#labels path
 train_labels = list(train_labels_path.glob('*sub1.tiff'))#get label images
 train_labels = sorted([x.as_posix() for x in train_labels])#sort
 #combine images and labels into monai dictionary format
@@ -228,7 +232,7 @@ data_dicts = [
     for image_name, label_name in zip(train_images,train_labels)
 ]
 
-mouse_ids_path = Path('/home/rozakmat/projects/def-bojana/rozakmat/TBI/raw')#each mouse has its own folder with raw data in it
+mouse_ids_path = Path('/home/rozakmat/projects/rrg-bojana/rozakmat/TBI/raw')#each mouse has its own folder with raw data in it
 mouse_ids = list(mouse_ids_path.glob('*'))#grab molder names/mouse ids
 images = sorted([y.name for y in train_images_paths])#sort
 #get mouse id corresponding to each image i have labels for
@@ -338,6 +342,14 @@ train_transforms = Compose(
                                                std = params['RandGaussianNoised_std'])
                            ]
              ),
+        RandCoarseDropoutd(keys = ["image"],
+                           prob=0.75,
+                           holes = 50,
+                           spatial_size=2,
+                           max_holes = 1000,
+                           max_spatial_size=6,
+                           fill_value = (0.0001,0.1)
+        ),
         #rottion+flip_transforms
         RandRotate90d(
             keys = ["image", "label"],
@@ -395,11 +407,15 @@ val_ds = CacheDataset(
     data=val_files, transform=val_transforms, cache_rate=1.0, num_workers=4)
 val_loader = DataLoader(val_ds, batch_size=1, num_workers=4)
 
+test_ds = CacheDataset(
+    data=test_files, transform=val_transforms, cache_rate=1.0, num_workers=4)
+test_loader = DataLoader(test_ds, batch_size=1, num_workers=4)
+
 ################################
 #Create Model, Loss, Optimizer
 ################################
 
-# standard PyTorch program style: create UNet, DiceLoss and Adam optimizer
+# standard PyTorch program style: create UNet, DiceLoss and Adam optimizere = torch.device("cuda:0")
 #device = torch.device("cuda:0")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = UNet(
@@ -417,25 +433,91 @@ model.to(device)
 loss_function = params['loss_function']
 optimizer = params['optimizer'](params = model.parameters(), 
                                 lr = params['learning_rate'])
-dice_metric = DiceMetric(include_background=False, 
-                         reduction="mean")
+dice_metric = DiceMetric(
+    include_background=False,
+    reduction="mean"
+)
+dice_metric_test = DiceMetric(
+    include_background=False,
+    reduction="mean"
+)
+confusion_metric = ConfusionMatrixMetric(metric_name= ["sensitivity", 
+                                                       "specificity", 
+                                                       "precision", 
+                                                       "negative predictive value", 
+                                                       "miss rate", 
+                                                       "fall out", 
+                                                       "false discovery rate", 
+                                                       "false omission rate", 
+                                                       "prevalence threshold", 
+                                                       "threat score", 
+                                                       "accuracy", 
+                                                       "balanced accuracy", 
+                                                       "f1 score", 
+                                                       "matthews correlation coefficient", 
+                                                       "fowlkes mallows index", 
+                                                       "informedness", 
+                                                       "markedness"],
+                                         include_background=False)
+confusion_metric_test = ConfusionMatrixMetric(metric_name= ["sensitivity", 
+                                                            "specificity", 
+                                                            "precision", 
+                                                            "negative predictive value", 
+                                                            "miss rate", 
+                                                            "fall out", 
+                                                            "false discovery rate", 
+                                                            "false omission rate", 
+                                                            "prevalence threshold", 
+                                                            "threat score", 
+                                                            "accuracy", 
+                                                            "balanced accuracy", 
+                                                            "f1 score", 
+                                                            "matthews correlation coefficient", 
+                                                            "fowlkes mallows index", 
+                                                            "informedness", 
+                                                            "markedness"],
+                                         include_background=False)
 #hausdorf_distance_metric = HausdorffDistanceMetric(include_background=False,
 #                                                   distance_metric='euclidean')
-dice_metric_deform = DiceMetric(include_background=False,
-                                reduction="mean")
-dice_metric_deform_boundary_difference = DiceMetric(include_background=False,
-                                                    reduction="mean")
-dice_metric_predicted_deform_boundary_difference = DiceMetric(include_background=False,
-                                                              reduction="mean")
-dice_metric_boundary_difference_detection = DiceMetric(include_background=False,
-                                                       reduction="mean")
+dice_metric_deform = DiceMetric(
+    include_background = False,
+    reduction = "mean"
+)
+dice_metric_deform_test = DiceMetric(
+    include_background = False,
+    reduction = "mean"
+)
+dice_metric_deform_boundary_difference = DiceMetric(
+    include_background = False,
+    reduction = "mean"
+)
+dice_metric_deform_boundary_difference_test = DiceMetric(
+    include_background = False,
+    reduction = "mean"
+)
+dice_metric_predicted_deform_boundary_difference = DiceMetric(
+    include_background = False,
+    reduction = "mean"
+)
+dice_metric_predicted_deform_boundary_difference_test = DiceMetric(
+    include_background = False,
+    reduction = "mean"
+)
+dice_metric_boundary_difference_detection = DiceMetric(
+    include_background = False,
+    reduction = "mean"
+)
+dice_metric_boundary_difference_detection_test = DiceMetric(
+    include_background = False,
+    reduction = "mean"
+)
 label_filter = Compose(
     [EnsureType(),
-     LabelFilter(applied_labels=(1))
+     LabelFilter(applied_labels = (1))
     ]
 )
 deform = Rand3DElastic(
-    sigma_range = (1,2),
+    sigma_range = (1,1.1),
     magnitude_range = (3,4),
     prob = 1
 )
@@ -445,17 +527,26 @@ deform = Rand3DElastic(
 ################################
 
 random.seed(12)
-max_epochs = params["max_epochs"]
+max_epochs = 2400#800#params["max_epochs"]
 val_interval = 2
 best_metric = -1
 best_metric_epoch = -1
 epoch_loss_values = []
 metric_values = []
+metric_values_test = []
+confusion_matrix_values = []
+confusion_matrix_values_test = []
+val_confusion_matrix = []
+test_confusion_matrix = []
 #hausdorf_distance_values = []
 metric_values_deform = []
+metric_values_deform_test = []
 metric_values_deform_boundary_difference = []
+metric_values_deform_boundary_difference_test = []
 metric_values_predicted_deform_boundary_difference = []
+metric_values_predicted_deform_boundary_difference_test = []
 metric_values_boundary_difference_detection = []
+metric_values_boundary_difference_detection_test = []
 post_pred = Compose([EnsureType(), AsDiscrete(argmax=True,to_onehot=3)])
 post_label = Compose([EnsureType(), AsDiscrete(to_onehot=3)])
 for epoch in tqdm(range(max_epochs)):
@@ -483,6 +574,7 @@ for epoch in tqdm(range(max_epochs)):
     epoch_loss_values.append(epoch_loss)
     log_metric('epoch_loss',epoch_loss, step = epoch)
     print(f"epoch {epoch + 1} average loss: {epoch_loss:.4f}")
+    del outputs
 
     if (epoch + 1) % val_interval == 0:
         model.eval()
@@ -519,8 +611,8 @@ for epoch in tqdm(range(max_epochs)):
                 # get predicted outputs
                 val_outputs_deform = [post_pred(i) for i in decollate_batch(deform_val_outputs)]
                 #fill holes in prediction
-                filled  = [FillHoles(applied_labels=[1],connectivity=2)(i) for i in val_outputs]
-                filled_deform  = [FillHoles(applied_labels=[1],connectivity=2)(i) for i in val_outputs_deform]
+                filled  = [FillHoles(connectivity=2)(i) for i in val_outputs]
+                filled_deform  = [FillHoles(connectivity=2)(i) for i in val_outputs_deform]
                 #generated boundaries from predictions
                 filled_vessels_boundary = [LabelToContour()(label_filter(i)) for i in filled]
                 filled_vessels_boundary_deform = [LabelToContour()(label_filter(i)) for i in filled_deform]
@@ -537,6 +629,8 @@ for epoch in tqdm(range(max_epochs)):
                     y_pred = filled,
                     y = val_labels
                 )
+                confusion_metric(y_pred = val_outputs,
+                                 y = val_labels)
                 #hausdorf_distance_metric(y_pred=filled, 
                 #                         y=val_labels)
                 #dice metric for deformed output, and prediction on deformed raw image
@@ -557,9 +651,86 @@ for epoch in tqdm(range(max_epochs)):
                 )
                 #dice metric for boundary difference detection
                 dice_metric_boundary_difference_detection(
-                    y_pred = filled_vessels_boundary_deform[0].ne(filled_vessels_boundary[0]),
-                    y = val_outputs_boundary_deform[0].ne(val_labels_boundary[0])
+                    y_pred = filled_vessels_boundary_deform[0].ne(filled_vessels_boundary[0])[1],
+                    y = val_outputs_boundary_deform[0].ne(filled_vessels_boundary[0]).int()[1]
                 )
+                del val_outputs
+            for test_data in test_loader:
+                seed = random.randint(0,10000000)
+                test_inputs, test_labels = (
+                    test_data["image"].to(device),
+                    test_data["label"].to(device),
+                )
+                roi_size = (128, 128, 128)
+                sw_batch_size = 1
+                test_outputs = sliding_window_inference(
+                    test_inputs, 
+                    roi_size, 
+                    sw_batch_size, 
+                    model
+                )
+                #get prediciton output
+                test_outputs = [post_pred(i) for i in decollate_batch(test_outputs)]
+                #deform raw image
+                deform.set_random_state(seed = seed)
+                deform_test_inputs = torch.unsqueeze(deform(torch.squeeze(test_inputs),mode='bilinear'),axis=0)
+                #deform validation output
+                deform.set_random_state(seed = seed)
+                deform_test_outputs_gt = deform(test_outputs[0],mode='nearest')
+                #predict on deformed raw image
+                deform_test_outputs =sliding_window_inference(
+                    deform_test_inputs, 
+                    roi_size, 
+                    sw_batch_size, 
+                    model
+                )   
+                # get predicted outputs
+                test_outputs_deform = [post_pred(i) for i in decollate_batch(deform_test_outputs)]
+                #fill holes in prediction
+                filled  = [FillHoles(connectivity=2)(i) for i in test_outputs]
+                filled_deform  = [FillHoles(connectivity=2)(i) for i in test_outputs_deform]
+                #generated boundaries from predictions
+                filled_vessels_boundary = [LabelToContour()(label_filter(i)) for i in filled]
+                filled_vessels_boundary_deform = [LabelToContour()(label_filter(i)) for i in filled_deform]
+                #get labelled data
+                test_labels = [post_label(i) for i in decollate_batch(test_labels)]
+                #print(val_labels.shape)
+                test_labels_deform = [deform_test_outputs_gt]
+                #get validation boundaries
+                test_labels_boundary = [LabelToContour()(i) for i in test_labels]
+                test_outputs_boundary_deform = [LabelToContour()(i) for i in test_labels_deform]
+                # compute metric for current iteration
+                #dice metric for ground truth and prediction
+                dice_metric_test(
+                    y_pred = filled,
+                    y = test_labels
+                )
+                confusion_metric_test(y_pred = filled,
+                                      y = test_labels)
+                #hausdorf_distance_metric(y_pred=filled, 
+                #                         y=val_labels)
+                #dice metric for deformed output, and prediction on deformed raw image
+                dice_metric_deform_test(
+                    y_pred = filled_deform,
+                    y = test_outputs_deform
+                )
+                #dice metric for boundary of ground truth and deformed ground truth
+                #measures how much the boundary was deformed
+                dice_metric_deform_boundary_difference_test(
+                    y_pred = test_outputs_boundary_deform,
+                    y = filled_vessels_boundary
+                )
+                
+                dice_metric_predicted_deform_boundary_difference_test(
+                    y_pred=test_outputs_boundary_deform[0],
+                    y=filled_vessels_boundary_deform[0]
+                )
+                #dice metric for boundary difference detection
+                dice_metric_boundary_difference_detection_test(
+                    y_pred = filled_vessels_boundary_deform[0].ne(filled_vessels_boundary[0])[1],
+                    y = test_outputs_boundary_deform[0].ne(filled_vessels_boundary[0]).int()[1]
+                )
+                del test_outputs
 
             # aggregate the final mean dice result
             metric = dice_metric.aggregate().item()
@@ -568,6 +739,14 @@ for epoch in tqdm(range(max_epochs)):
                 metric,
                 step = epoch
             )
+            metric_test = dice_metric_test.aggregate().item()
+            log_metric(
+                'dice_test',
+                metric_test,
+                step = epoch
+            )
+            confusion_matrix_metrics = np.array(torch.tensor(confusion_metric.aggregate()).cpu())
+            confusion_matrix_metrics_test = np.array(torch.tensor(confusion_metric_test.aggregate()).cpu())
             #hausdorf_distance = hausdorf_distance_metric.aggregate().item()
             #aggregate the dice score for the prediction fo the deformed raw image againsed the deformed prediction
             metric_deform = dice_metric_deform.aggregate().item()
@@ -576,10 +755,22 @@ for epoch in tqdm(range(max_epochs)):
                 metric_deform,
                 step = epoch
             )
+            metric_deform_test = dice_metric_deform_test.aggregate().item()
+            log_metric(
+                'dice_deformed_validation_test',
+                metric_deform_test,
+                step = epoch
+            )
             metric_deform_boundary_difference = dice_metric_deform_boundary_difference.aggregate().item()
             log_metric(
                 'ground_truths_boundary_dice',
                 metric_deform_boundary_difference,
+                step = epoch
+            )
+            metric_deform_boundary_difference_test = dice_metric_deform_boundary_difference_test.aggregate().item()
+            log_metric(
+                'ground_truths_boundary_dice_test',
+                metric_deform_boundary_difference_test,
                 step = epoch
             )
             metric_predicted_deform_boundary_difference = dice_metric_predicted_deform_boundary_difference.aggregate().item()
@@ -588,22 +779,47 @@ for epoch in tqdm(range(max_epochs)):
                 metric_predicted_deform_boundary_difference,
                 step = epoch
             )
+            metric_predicted_deform_boundary_difference_test = dice_metric_predicted_deform_boundary_difference_test.aggregate().item()
+            log_metric(
+                'predicted_boundary_dice_test',
+                metric_predicted_deform_boundary_difference_test,
+                step = epoch
+            )
             metric_boundary_difference_detection = dice_metric_boundary_difference_detection.aggregate().item()
             log_metric(
                 'dice_deformed_boundary_ground_truth_to_prediction',
                 metric_boundary_difference_detection,
                 step = epoch
             )
+            metric_boundary_difference_detection_test = dice_metric_boundary_difference_detection_test.aggregate().item()
+            log_metric(
+                'dice_deformed_boundary_ground_truth_to_prediction_test',
+                metric_boundary_difference_detection_test,
+                step = epoch
+            )
             # reset the status for next validation round
             dice_metric.reset()
+            dice_metric_test.reset()
             #hausdorf_distance_metric.reset()
             dice_metric_deform.reset()
+            dice_metric_deform_test.reset()
             dice_metric_deform_boundary_difference.reset()
+            dice_metric_deform_boundary_difference_test.reset()
             #dice_metric_predicted_deform_boundary_difference.reset()
             dice_metric_boundary_difference_detection.reset()
+            dice_metric_boundary_difference_detection_test.reset()
 
             metric_values.append(
                 metric
+            )
+            metric_values_test.append(
+                metric_test
+            )
+            confusion_matrix_values.append(
+                confusion_matrix_metrics
+            )
+            confusion_matrix_values_test.append(
+                confusion_matrix_metrics_test
             )
             #hausdorf_distance_values.append(
             #    hausdorf_distance
@@ -611,20 +827,32 @@ for epoch in tqdm(range(max_epochs)):
             metric_values_deform.append(
                 metric_deform
             )
+            metric_values_deform_test.append(
+                metric_deform_test
+            )
             metric_values_deform_boundary_difference.append(
                 metric_deform_boundary_difference
+            )
+            metric_values_deform_boundary_difference_test.append(
+                metric_deform_boundary_difference_test
             )
             metric_values_predicted_deform_boundary_difference.append(
                 metric_predicted_deform_boundary_difference
             )
+            metric_values_predicted_deform_boundary_difference_test.append(
+                metric_predicted_deform_boundary_difference_test
+            )
             metric_values_boundary_difference_detection.append(
                 metric_boundary_difference_detection
+            )
+            metric_values_boundary_difference_detection_test.append(
+                metric_boundary_difference_detection_test
             )
             if metric > best_metric:
                 best_metric = metric
                 best_metric_epoch = epoch + 1
                 torch.save(model.state_dict(), os.path.join(
-                    directory, "best_metric_model.pth"))
+                    directory, "best_metric_model_rerun.pth"))
                 print("saved new best metric model")
             print(
                 f"current epoch: {epoch + 1} current mean dice: {metric:.4f}"
@@ -650,12 +878,17 @@ log_metric("best_epoch",best_metric_epoch)
 
 df = pd.DataFrame()
 df['Epoch_Average_Loss'] = epoch_loss_values
-df.to_csv(directory + '/metrics_loss.csv')
+df.to_excel(directory + '/metrics_loss_rerun.xlsx')
+np.save(directory + '/confusion_rerun.npy',np.array(confusion_matrix_values))
+np.save(directory + '/confusion_test_rerun.npy',np.array(confusion_matrix_values_test))
 df = pd.DataFrame()
 df['Val_Mean_Dice'] = metric_values
+df['test_Mean_Dice'] = metric_values_test
 df['boundary_detection_dice'] = metric_values_boundary_difference_detection
+df['boundary_detection_dice_test'] = metric_values_boundary_difference_detection_test
 df['boundary_difference_dice'] = metric_values_deform_boundary_difference
-df.to_csv(directory + '/metrics_validation.csv')
+df['boundary_difference_dice_test'] = metric_values_deform_boundary_difference_test
+df.to_excel(directory + '/metrics_validation_rerun.xlsx')
 
 #################################
 # Plot the loss and dice

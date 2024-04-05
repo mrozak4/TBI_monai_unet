@@ -12,6 +12,6 @@
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-type=REQUEUE
 
-module load python/3.7
-source /home/rozakmat/projects/def-bojana/rozakmat/monai/bin/activate
-python /home/rozakmat/projects/def-bojana/rozakmat/TBI_monai_UNET/train_unet_optimize_hyperparameters.py -c /home/rozakmat/projects/def-bojana/rozakmat/TBI_monai_UNET/hyperparameter_pickle_files/parameters184.pickle
+module load anaconda3
+source activate jupyter_env
+python /scratch/b/bojana/rozakmat/TBI_monai_UNET/train_unet_optimize_hyperparameters.py -c /scratch/b/bojana/rozakmat/TBI_monai_UNET/hyperparameter_pickle_files/parameters81.pickle
