@@ -48,7 +48,9 @@ def register_paired_images(fix_file, mov_files, out_dir, sigma=2, flip = False):
     Raises:
         FileNotFoundError: If any of the input image files are not found.
     """
-
+    
+    print(flip)
+    
     # Read the fixed image
     fix_numpy = imread(fix_file)
     fix = from_numpy(float32(fix_numpy[:,0])) # Convert images to ants 
@@ -61,16 +63,23 @@ def register_paired_images(fix_file, mov_files, out_dir, sigma=2, flip = False):
                 name, value = tag.name, tag.value
                 tif_tags[name] = value
             image = tif.pages[0].asarray()
+        #print(tif_tags)
         start_str = float([x for x in tif_tags['IJMetadata']['Info'].split('\n') if 'axis startPosition #1' in x][0].split(' ')[-1])
         end_str = float([x for x in tif_tags['IJMetadata']['Info'].split('\n') if 'axis endPosition #1' in x][0].split(' ')[-1])
         direction = end_str - start_str
-
+        if [x for x in tif_tags['IJMetadata']['Info'].split('\n') if 'imagingParam zDriveUnitType' in x][0].split(' ')[-1] == 'Piezo':
+            direction = float([x for x in tif_tags['IJMetadata']['Info'].split('\n') if 'acquisitionValue zPosition' in x][0].split(' ')[-1])
+            piezo = True
+        else:
+            piezo = False
+        #print(direction)
+        
     res2 = []
     for mov_file in mov_files:
         # Read the moving image
         mov_numpy = imread(mov_file)
         
-        if flip == True:
+        if flip == True and piezo == False:
             with TiffFile(mov_file) as tif:
                 tif_tags = {}
                 for tag in tif.pages[0].tags.values():
@@ -79,9 +88,22 @@ def register_paired_images(fix_file, mov_files, out_dir, sigma=2, flip = False):
                 image = tif.pages[0].asarray()
             start_str = float([x for x in tif_tags['IJMetadata']['Info'].split('\n') if 'axis startPosition #1' in x][0].split(' ')[-1])
             end_str = float([x for x in tif_tags['IJMetadata']['Info'].split('\n') if 'axis endPosition #1' in x][0].split(' ')[-1])
-
+            #print((end_str - start_str))
             # Flip the moving image if necessary
             if direction * (end_str - start_str) < 0:
+                mov_numpy = mov_numpy[::-1]
+                print('flipped')
+        elif flip == True and piezo == True:
+            with TiffFile(mov_file) as tif:
+                tif_tags = {}
+                for tag in tif.pages[0].tags.values():
+                    name, value = tag.name, tag.value
+                    tif_tags[name] = value
+                image = tif.pages[0].asarray()
+            piezo_dir = float([x for x in tif_tags['IJMetadata']['Info'].split('\n') if 'acquisitionValue zPosition' in x][0].split(' ')[-1])
+            #print((piezo_dir))
+            # Flip the moving image if necessary
+            if direction != piezo_dir:
                 mov_numpy = mov_numpy[::-1]
                 print('flipped')
 
@@ -118,5 +140,5 @@ def register_paired_images(fix_file, mov_files, out_dir, sigma=2, flip = False):
 
     # Save the fixed image
     imsave(out_dir + sub('.tif','_warped.tif',basename(dirname(fix_file)) + '-' + basename(fix_file)),fix_numpy)
-
+    
     return res2

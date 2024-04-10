@@ -156,6 +156,7 @@ images = sorted([x.as_posix() for x in mouse_ids if '_0001' in x.as_posix()])
 #images = [x for x in images if 'vbm' in x]
 images = [x for x in images if  any(y in x for y in list(dic.keys()))]
 #images = [x for x in images if any(y in x for y in ['14/','49/','56/','68/','65/','61/'])]
+#images = [x for x in images if any(y in x for y in ['94/','95/','96/', '85/', '87/', '88/','91/', '93/', '97/'])]
 unused_keys = [x for x in list(dic.keys()) if not  any(x in y for y in images)]
 print(len(images))
 print(images[1])

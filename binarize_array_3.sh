@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --account=def-cdemore
+#SBATCH --account=rrg-bojana_cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --time=3:00:00
@@ -13,7 +13,7 @@
 #SBATCH --mail-type=END
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-type=REQUEUE
-#SBATCH --dependency=afterok:17035130
+
 
 
 source ~/projects/def-bojana/rozakmat/monai3.8/bin/activate

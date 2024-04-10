@@ -28,60 +28,7 @@ from scipy.stats import multivariate_normal
 from skimage import color, data, restoration
 from RedLionfishDeconv import doRLDeconvolutionFromNpArrays
 import argparse
-
-def remove_small_comps_3d(image, thresh = 500*9):
-    """
-    
-
-    Parameters
-    ----------
-    image : binary np array with uint8 elements
-        3d numpy matrix, connected components will be removed form this image
-    thresh : int64
-        smallest connected components to keep
-
-    Returns
-    -------
-    np.array with uint8 elements, binary
-        binary image with connected components below the threshold removed.
-
-    """
-    img_lab, N = cc3d.connected_components(image,return_N=True)
-    unique, counts = np.unique(img_lab, return_counts=True)
-    unique_keep = unique[counts>thresh]
-    unique_keep = np.delete(unique_keep,[0])
-    img_filt = np.zeros(img_lab.shape).astype('int8')
-    img_filt[np.isin(img_lab,unique_keep)] = 1
-    return img_filt.astype('uint8')   
-
-def fill_holes(img,thresh=100*9):
-    #res = np.zeros(img.shape)
-    for i in np.unique(img)[::-1]:
-        _tmp = (img==i)*1.0
-        _tmp = _tmp.astype('int8')
-        _tmp = remove_small_comps_3d(_tmp,thresh=thresh)
-        img[_tmp==1] = i
-    res = img.astype('int8')
-    return res
-
-def _rotmat(vector, points):
-    """
-    Rotates a 3xn array of 3D coordinates from the +z normal to an
-    arbitrary new normal vector.
-    """
-    
-    vector = vg.normalize(vector)
-    axis = vg.perpendicular(vg.basis.z, vector)
-    angle = vg.angle(vg.basis.z, vector, units='rad')
-    
-    a = np.hstack((axis, (angle,)))
-    R = matrix_from_axis_angle(a)
-    
-    r = sp.spatial.transform.Rotation.from_matrix(R)
-    rotmat = r.apply(points)
-    
-    return rotmat
-
+from utilities import remove_small_comps_3d, fill_holes, _rotmat, closest_node
 
 
 directory = Path('matt_raw_warped_single_upsampled')
@@ -89,53 +36,31 @@ files  = directory.glob('*-*_mean.npy')
 files = sorted([x.as_posix() for x in files])
 print(len(files))
 
-parser = argparse.ArgumentParser(description='take hyperparameter inputs')
-
-parser.add_argument('-c','--cfg', type=int, dest='cfg', action='store')
-
-args = parser.parse_args()
-
-file = args.cfg
-
-i = file
-
-print(i)
-
-file = files[i]
 
 min_prob = 0.5
 max_var = 0.2
 
-print('start')
-if not os.path.exists(re.sub('led/','led_seg/',re.sub('mean','seg',file))):
-    if os.path.exists(re.sub('mean','2x_std',file)):
-        print(file)
-        mean = np.load(file)
-        std = np.load(re.sub('mean','2x_std',file))
-        seg = np.zeros(mean.shape[1:])
-        seg[(mean[1,:,:,:] > min_prob) * (std[1,:,:,:] < max_var)] = 1
-        seg[(mean[2,:,:,:] > min_prob) * (std[2,:,:,:] < max_var)] = 2
-        seg = seg.astype('int8')
-        seg = (seg==1)*1
-        seg = fill_holes(seg)
-        seg = remove_small_comps_3d(seg)
-        print(seg.shape)
-        np.save(re.sub('led/','led_seg/',re.sub('mean','seg',file)),seg)
-print('done')
-
 np.random.shuffle(files)
 for file in tqdm(files[::-1]):
-    if not os.path.exists(re.sub('led/','led_seg/',re.sub('mean','seg',file))):
-        if os.path.exists(re.sub('mean','2x_std',file)):
+    # Check if the segmented file already exists
+    seg_file = re.sub('led/','led_seg/',re.sub('mean','seg',file))
+    if not os.path.exists(seg_file):
+        # Check if the standard deviation file exists
+        std_file = re.sub('mean','2x_std',file)
+        if os.path.exists(std_file):
             print(file)
             mean = np.load(file)
-            std = np.load(re.sub('mean','2x_std',file))
+            std = np.load(std_file)
             seg = np.zeros(mean.shape[1:]).astype('int8')
+            # Segment the image based on mean and standard deviation thresholds
             seg[(mean[1,:,:,:] > min_prob) * (std[1,:,:,:] < max_var)] = 1
             seg[(mean[2,:,:,:] > min_prob) * (std[2,:,:,:] < max_var)] = 2
             seg = seg.astype('int8')
             seg = (seg==1)*1
+            # Fill holes in the segmented image
             seg = fill_holes(seg)
+            # Remove small connected components from the segmented image
             seg = remove_small_comps_3d(seg)
             print(seg.shape)
-            np.save(re.sub('led/','led_seg/',re.sub('mean','seg',file)),seg)
+            # Save the segmented image
+            np.save(seg_file, seg)
