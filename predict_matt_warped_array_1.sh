@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --account=rrg-bojana_gpu
+#SBATCH --account=rrg-mgoubran_gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:4

@@ -7,7 +7,7 @@
 #SBATCH --array=0-100
 #SBATCH --cpus-per-task=16
 #SBATCH --mail-user=matthew.rozak@mail.utoronto.ca
-#SBATCH --out=/home/rozakmat/projects/rrg-bojana/rozakmat/TBI_monai_UNET/logs/calc_std-%A_%a.out --array=0-100
+#SBATCH --out=/home/rozakmat/projects/rrg-bojana/rozakmat/TBI_monai_UNET/logs/calc_std-%A_%a.out --array=0-100%10
 #SBATCH --mail-type=BEGIN
 #SBATCH --mail-type=END
 #SBATCH --mail-type=FAIL
